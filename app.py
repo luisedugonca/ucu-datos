@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from sklearn.datasets import fetch_california_housing
 
-# Intento importar matplotlib; si no está, uso plotly
+# Intento importar matplotlib; si no está, uso plotly, me daba error
 try:
     import matplotlib.pyplot as plt
     USE_MPL = True
@@ -29,9 +29,9 @@ st.title("California Housing – Explorador Interactivo")
 st.caption("Fase 1: Carga y preparación de datos con Pandas")
 
 # Valores faltantes (versión simple)
+valor = int(df_california.isna().sum().sum())
 st.subheader("Valores faltantes / vacíos (simple)")
-st.write("Nulos por columna (isna):")
-st.write(df_california.isna().sum())
+st.markdown(f'Nulos por columna (isna): "{valor}"')
 
 # Strings vacíos (solo si existen columnas de texto)
 if df_california.select_dtypes(include="object").shape[1] > 0:
