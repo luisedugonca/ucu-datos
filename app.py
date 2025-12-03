@@ -143,9 +143,4 @@ with st.expander("📍 Opcional: Mapa geográfico (Lat/Long)"):
     else:
         st.info("Sin datos para mapear.")
 
-# ========= Fase 4 =========
-st.header("Despliegue en la nube – Streamlit Community Cloud")
-st.markdown(
-    "- Subí `app.py` y `requirements.txt` al repo.\n"
-    "- En Streamlit Cloud: New app → conectá el repo → Deploy."
-)
+
