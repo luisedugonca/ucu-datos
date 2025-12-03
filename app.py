@@ -94,7 +94,7 @@ st.write(df_california.dtypes.to_frame("dtype"))
 st.markdown('<h2 id="controles" data-anchor="controles">Controles y filtros</h2>', unsafe_allow_html=True)
 st.sidebar.markdown("## Controles")
 st.sidebar.markdown(
-    "Usá los filtros para acotar por **HouseAge** y **Latitud mínima (vecindario)**."
+    "Usa los filtros para acotar por **HouseAge** y **Latitud mínima (vecindario)**."
 )
 
 houseage_min = float(df_california["HouseAge"].min())
@@ -122,7 +122,7 @@ if use_lat_filter and not df_f.empty:
     df_f = df_f.loc[df_f["Latitude"] >= lat_min].copy()
 
 # ========= Sección: Resumen =========
-st.markdown('<h2 id="resumen" data-anchor="resumen">Resumen descriptivo (tras filtros)</h2>', unsafe_allow_html=True)
+st.markdown('<h2 id="resumen" data-anchor="resumen">Resumen descriptivo</h2>', unsafe_allow_html=True)
 if df_f.empty:
     st.warning("No hay filas tras aplicar los filtros.")
 else:
