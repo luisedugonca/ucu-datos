@@ -63,7 +63,7 @@ st.subheader("Vista rápida del DataFrame")
 st.dataframe(df_california.head())
 st.write("Tipos de datos por columna:")
 st.write(df_california.dtypes.to_frame("dtype"))
-"""
+
 # =========================
 # Fase 2: Análisis Descriptivo Interactivo
 # =========================
@@ -150,8 +150,4 @@ with st.expander("📍 Opcional: Mapa geográfico (Lat/Long)"):
     else:
         st.info("Sin datos para mapear.")
 
-# =========================
-# Fase 4: Guía de despliegue
-# =========================
-st.header("Despliegue en la nube – Streamlit Community Cloud")
-st.markdown("""
+
