@@ -42,8 +42,8 @@ if df_california.select_dtypes(include="object").shape[1] > 0:
 else:
     vacios_str = pd.Series(dtype=int)
 
-st.write("Strings vacíos por columna (solo texto):")
-st.write(vacios_str)
+total_vacios = int(vacios_str.sum()) if not vacios_str.empty else 0
+st.markdown(f'Strings vacíos (solo texto): "{total_vacios}"')
 
 st.subheader("Vista rápida del DataFrame")
 st.dataframe(df_california.head())
