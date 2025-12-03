@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.datasets import fetch_california_housing
+import streamlit.components.v1 as components  # <-- para el scroll
 
 # Intento importar Matplotlib; si falla, uso Plotly
 try:
@@ -13,6 +14,13 @@ except Exception:
     USE_MPL = False
 
 st.set_page_config(page_title="California Housing Explorer", layout="wide")
+
+# --- CSS: separador visual y margen de scroll para encabezados ---
+st.markdown("""
+<style>
+h2, h3 { scroll-margin-top: 80px; }  /* evita que el header quede tapado */
+</style>
+""", unsafe_allow_html=True)
 
 @st.cache_data
 def load_data() -> pd.DataFrame:
@@ -26,22 +34,42 @@ df_california = load_data()
 
 st.title("California Housing – Explorador Interactivo")
 
-# ---------------- Sidebar: Índice con links (anclas) ----------------
-st.sidebar.markdown(
-    """
-    ### Índice
-    - <a href="#faltantes">Valores faltantes / vacíos</a>
-    - <a href="#vista">Vista rápida + dtypes</a>
-    - <a href="#controles">Controles y filtros</a>
-    - <a href="#resumen">Resumen descriptivo</a>
-    - <a href="#vis">Visualizaciones</a>
-    - <a href="#mapa">Mapa geográfico</a>
-    """,
-    unsafe_allow_html=True,
-)
+# ========== SIDEBAR: Índice con scroll programático ==========
+st.sidebar.markdown("### Índice")
+if st.sidebar.button("Valores faltantes / vacíos", use_container_width=True):
+    st.session_state["_scroll_to"] = "faltantes"
+if st.sidebar.button("Vista rápida + dtypes", use_container_width=True):
+    st.session_state["_scroll_to"] = "vista"
+if st.sidebar.button("Controles y filtros", use_container_width=True):
+    st.session_state["_scroll_to"] = "controles"
+if st.sidebar.button("Resumen descriptivo", use_container_width=True):
+    st.session_state["_scroll_to"] = "resumen"
+if st.sidebar.button("Visualizaciones", use_container_width=True):
+    st.session_state["_scroll_to"] = "vis"
+if st.sidebar.button("Mapa geográfico", use_container_width=True):
+    st.session_state["_scroll_to"] = "mapa"
 
-# ---------------- Sección: Faltantes ----------------
-st.markdown('<h2 id="faltantes">Valores faltantes / vacíos (simple)</h2>', unsafe_allow_html=True)
+def do_scroll():
+    anchor = st.session_state.pop("_scroll_to", None)
+    if not anchor:
+        return
+    components.html(f"""
+    <script>
+    const anchorId = "{anchor}";
+    // Busca por id exacto
+    let el = window.parent.document.getElementById(anchorId);
+    // fallback: busca <h2>/<h3> con data-anchor (lo ponemos abajo)
+    if (!el) {{
+        el = window.parent.document.querySelector(`[data-anchor="${{anchorId}}"]`);
+    }}
+    if (el && el.scrollIntoView) {{
+        el.scrollIntoView({{ behavior: "smooth", block: "start" }});
+    }}
+    </script>
+    """, height=0)
+
+# ========= Sección: Faltantes =========
+st.markdown('<h2 id="faltantes" data-anchor="faltantes">Valores faltantes / vacíos (simple)</h2>', unsafe_allow_html=True)
 total_nulos = int(df_california.isna().sum().sum())
 st.markdown(f'Nulos por columna (isna): "{total_nulos}"')
 
@@ -56,14 +84,14 @@ else:
 total_vacios = int(vacios_str.sum()) if not vacios_str.empty else 0
 st.markdown(f'Strings vacíos (solo texto): "{total_vacios}"')
 
-# ---------------- Sección: Vista + dtypes ----------------
-st.markdown('<h2 id="vista">Vista rápida del DataFrame</h2>', unsafe_allow_html=True)
+# ========= Sección: Vista + dtypes =========
+st.markdown('<h2 id="vista" data-anchor="vista">Vista rápida del DataFrame</h2>', unsafe_allow_html=True)
 st.dataframe(df_california.head())
 st.markdown('<h3>Tipos de datos por columna</h3>', unsafe_allow_html=True)
 st.write(df_california.dtypes.to_frame("dtype"))
 
-# ---------------- Sección: Controles (sidebar) ----------------
-st.markdown('<h2 id="controles">Controles y filtros</h2>', unsafe_allow_html=True)
+# ========= Sección: Controles (sidebar) =========
+st.markdown('<h2 id="controles" data-anchor="controles">Controles y filtros</h2>', unsafe_allow_html=True)
 st.sidebar.markdown("## Controles")
 st.sidebar.markdown(
     "Usá los filtros para acotar por **HouseAge** y **Latitud mínima (vecindario)**."
@@ -93,8 +121,8 @@ if use_lat_filter and not df_f.empty:
     )
     df_f = df_f.loc[df_f["Latitude"] >= lat_min].copy()
 
-# ---------------- Sección: Resumen ----------------
-st.markdown('<h2 id="resumen">Resumen descriptivo (tras filtros)</h2>', unsafe_allow_html=True)
+# ========= Sección: Resumen =========
+st.markdown('<h2 id="resumen" data-anchor="resumen">Resumen descriptivo (tras filtros)</h2>', unsafe_allow_html=True)
 if df_f.empty:
     st.warning("No hay filas tras aplicar los filtros.")
 else:
@@ -105,8 +133,8 @@ else:
     c2.metric("Mediana MedHouseVal", f"{mediana:,.3f}")
     c3.metric("Rango (max - min)", f"{rango:,.3f}")
 
-# ---------------- Sección: Visualizaciones ----------------
-st.markdown('<h2 id="vis">Visualizaciones</h2>', unsafe_allow_html=True)
+# ========= Sección: Visualizaciones =========
+st.markdown('<h2 id="vis" data-anchor="vis">Visualizaciones</h2>', unsafe_allow_html=True)
 
 # Histograma (tema oscuro)
 st.subheader("Distribución de MedHouseVal (tras filtros)")
@@ -154,8 +182,8 @@ if not df_f.empty:
 else:
     st.info("Sin datos para graficar.")
 
-# ---------------- Sección: Mapa ----------------
-st.markdown('<h2 id="mapa">Mapa geográfico</h2>', unsafe_allow_html=True)
+# ========= Sección: Mapa =========
+st.markdown('<h2 id="mapa" data-anchor="mapa">Mapa geográfico</h2>', unsafe_allow_html=True)
 with st.expander("📍Mapa geográfico (Lat/Long)"):
     if not df_f.empty:
         df_map = df_f.rename(columns={"Latitude": "lat", "Longitude": "lon"})
@@ -165,3 +193,6 @@ with st.expander("📍Mapa geográfico (Lat/Long)"):
             st.map(df_map[["lat", "lon"]])
     else:
         st.info("Sin datos para mapear.")
+
+# ========== Ejecuta el scroll si alguien tocó un botón del índice ==========
+do_scroll()
