@@ -9,7 +9,7 @@ try:
     import matplotlib.pyplot as plt
     USE_MPL = True
 except Exception:
-    import plotly.express as px  # sólo si no hay MPL
+    import plotly.express as px  # fallback si no hay Matplotlib
     USE_MPL = False
 
 st.set_page_config(page_title="California Housing Explorer", layout="wide")
@@ -26,10 +26,10 @@ df_california = load_data()
 
 st.title("California Housing – Explorador Interactivo")
 
-# ====== Valores faltantes (simple) ======
-valor = int(df_california.isna().sum().sum())
+# ====== Chequeos simples de faltantes ======
 st.subheader("Valores faltantes / vacíos (simple)")
-st.markdown(f'Nulos por columna (isna): "{valor}"')
+total_nulos = int(df_california.isna().sum().sum())
+st.markdown(f'Nulos por columna (isna): "{total_nulos}"')
 
 # Strings vacíos (solo si existen columnas de texto)
 if df_california.select_dtypes(include="object").shape[1] > 0:
@@ -43,15 +43,16 @@ else:
 total_vacios = int(vacios_str.sum()) if not vacios_str.empty else 0
 st.markdown(f'Strings vacíos (solo texto): "{total_vacios}"')
 
+# Vista rápida
 st.subheader("Vista rápida del DataFrame")
 st.dataframe(df_california.head())
 st.write("Tipos de datos por columna:")
 st.write(df_california.dtypes.to_frame("dtype"))
 
-# ========= Fase 2 =========
+# ========= Fase 2: Controles =========
 st.sidebar.markdown("## Controles")
 st.sidebar.markdown(
-    "Usa los filtros para acotar por **HouseAge** y **latitud mínima**."
+    "Usá los filtros para acotar por **HouseAge** y **Latitud mínima (vecindario)**."
 )
 
 # Slider HouseAge
@@ -68,7 +69,7 @@ df_f = df_california.loc[
     (df_california["HouseAge"] <= age_range[1])
 ].copy()
 
-# Checkbox + number_input para latitud mínima (usando rangos del DF ya filtrado)
+# Checkbox + number_input para latitud mínima (usando el DF ya filtrado por HouseAge)
 use_lat_filter = st.sidebar.checkbox("Filtrar por vecindario (Latitud mínima)", value=False)
 if use_lat_filter and not df_f.empty:
     lat_min_total = float(df_f["Latitude"].min())
@@ -80,7 +81,8 @@ if use_lat_filter and not df_f.empty:
     )
     df_f = df_f.loc[df_f["Latitude"] >= lat_min].copy()
 
-st.subheader("Resumen descriptivo (tras filtros)")
+# Resumen post-filtros
+st.subheader("Resumen descriptivo")
 if df_f.empty:
     st.warning("No hay filas tras aplicar los filtros.")
 else:
@@ -91,117 +93,59 @@ else:
     c2.metric("Mediana MedHouseVal", f"{mediana:,.3f}")
     c3.metric("Rango (max - min)", f"{rango:,.3f}")
 
-# ========= Fase 3 =========
+# ========= Fase 3: Visualizaciones =========
 st.header("Visualizaciones")
 
-# Helper robusto para outliers
-def iqr_mask(series: pd.Series):
-    """Devuelve (mask_outlier, lower, upper) usando IQR sobre la serie actual.
-       Si hay pocos datos (<4) o IQR=0, no marca outliers.
-    """
-    s = pd.to_numeric(series, errors="coerce").dropna()
-    if s.size < 4:
-        return pd.Series(False, index=series.index), s.min() if len(s) else None, s.max() if len(s) else None
-    q1, q3 = s.quantile([0.25, 0.75])
-    iqr = q3 - q1
-    if iqr == 0:
-        return pd.Series(False, index=series.index), s.min(), s.max()
-    lower = q1 - 1.5 * iqr
-    upper = q3 + 1.5 * iqr
-    mask = (series < lower) | (series > upper)
-    mask = mask.reindex(series.index).fillna(False)  # alinear con df_f
-    return mask, lower, upper
-
-# --- Histograma del Target (fondo negro + outliers) ---
+# --- Histograma del Target (fondo negro, sin outliers) ---
 st.subheader("Distribución de MedHouseVal")
 if not df_f.empty:
-    mask_y, lower, upper = iqr_mask(df_f["MedHouseVal"])
-
     if USE_MPL:
         fig1, ax1 = plt.subplots(figsize=(6, 4), facecolor="black")
         ax1.set_facecolor("black")
-        ax1.hist(df_f["MedHouseVal"], bins=30, color="#CCCCCC", edgecolor="#CCCCCC", alpha=0.35)
+        ax1.hist(df_f["MedHouseVal"], bins=30, color="#CCCCCC", edgecolor="#CCCCCC", alpha=0.6)
 
-        if lower is not None and upper is not None:
-            ax1.axvline(lower, color="white", linestyle="--", linewidth=1)
-            ax1.axvline(upper, color="white", linestyle="--", linewidth=1)
-
-        if mask_y.any():
-            ax1.plot(
-                df_f.loc[mask_y, "MedHouseVal"],
-                [0] * int(mask_y.sum()),
-                "|", color="#FF4136", markersize=12, label="Outliers"
-            )
-
+        # Estética: ejes/labels/ticks blancos
         for spine in ax1.spines.values():
             spine.set_color("white")
         ax1.tick_params(colors="white")
         ax1.set_xlabel("MedHouseVal", color="white")
         ax1.set_ylabel("Frecuencia", color="white")
-        ax1.set_title("Histograma de MedHouseVal (IQR outliers)", color="white")
-        if mask_y.any():
-            leg = ax1.legend()
-            for text in leg.get_texts():
-                text.set_color("white")
-        st.pyplot(fig1)
+        ax1.set_title("Histograma de MedHouseVal", color="white")
 
+        st.pyplot(fig1)
     else:
-        import plotly.express as px
-        fig1 = px.histogram(df_f, x="MedHouseVal", nbins=30, title="Histograma de MedHouseVal (IQR outliers)")
+        fig1 = px.histogram(df_f, x="MedHouseVal", nbins=30, title="Histograma de MedHouseVal")
         fig1.update_layout(template="plotly_dark", paper_bgcolor="black", plot_bgcolor="black", font_color="white")
-        if (lower is not None) and (upper is not None):
-            fig1.add_vline(x=lower, line_dash="dash", line_color="white")
-            fig1.add_vline(x=upper, line_dash="dash", line_color="white")
-        if mask_y.any():
-            fig1.add_scatter(
-                x=df_f.loc[mask_y, "MedHouseVal"], y=[0]*int(mask_y.sum()),
-                mode="markers", marker=dict(color="#FF4136", size=8),
-                name="Outliers"
-            )
         st.plotly_chart(fig1, use_container_width=True)
 else:
     st.info("Sin datos para graficar.")
 
-# --- Scatter MedInc vs MedHouseVal (fondo negro + outliers) ---
+# --- Scatter MedInc vs MedHouseVal (fondo negro, sin outliers) ---
 st.subheader("Relación: MedInc (X) vs MedHouseVal (Y)")
 if not df_f.empty:
-    mask_y, lower, upper = iqr_mask(df_f["MedHouseVal"])
-
     if USE_MPL:
         fig2, ax2 = plt.subplots(figsize=(6, 4), facecolor="black")
         ax2.set_facecolor("black")
 
         ax2.scatter(
-            df_f.loc[~mask_y, "MedInc"], df_f.loc[~mask_y, "MedHouseVal"],
-            s=8, alpha=0.6, color="#CCCCCC", label="Datos"
+            df_f["MedInc"], df_f["MedHouseVal"],
+            s=10, alpha=0.7, color="#CCCCCC", label="Datos"
         )
-        if mask_y.any():
-            ax2.scatter(
-                df_f.loc[mask_y, "MedInc"], df_f.loc[mask_y, "MedHouseVal"],
-                s=20, alpha=0.9, color="#FF4136", label="Outliers"
-            )
 
+        # Estética: ejes/labels/ticks blancos
         for spine in ax2.spines.values():
             spine.set_color("white")
         ax2.tick_params(colors="white")
         ax2.set_xlabel("MedInc (Mediana de Ingresos)", color="white")
         ax2.set_ylabel("MedHouseVal (Valor mediano vivienda)", color="white")
         ax2.set_title("Scatter: MedInc vs MedHouseVal", color="white")
-        leg = ax2.legend()
-        for text in leg.get_texts():
-            text.set_color("white")
-        st.pyplot(fig2)
 
+        st.pyplot(fig2)
     else:
-        import plotly.express as px
-        df_plot = df_f.copy()
-        df_plot["outlier"] = np.where(mask_y, "Outlier", "Dato")
         fig2 = px.scatter(
-            df_plot, x="MedInc", y="MedHouseVal",
-            color="outlier", opacity=0.85,
-            title="Scatter: MedInc vs MedHouseVal",
-            labels={"MedInc":"MedInc (Mediana de Ingresos)", "MedHouseVal":"Valor mediano vivienda"},
-            color_discrete_map={"Dato":"#CCCCCC", "Outlier":"#FF4136"}
+            df_f, x="MedInc", y="MedHouseVal",
+            opacity=0.8, title="Scatter: MedInc vs MedHouseVal",
+            labels={"MedInc":"MedInc (Mediana de Ingresos)", "MedHouseVal":"Valor mediano vivienda"}
         )
         fig2.update_layout(template="plotly_dark", paper_bgcolor="black", plot_bgcolor="black", font_color="white")
         st.plotly_chart(fig2, use_container_width=True)
