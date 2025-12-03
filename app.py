@@ -4,12 +4,12 @@ import pandas as pd
 import numpy as np
 from sklearn.datasets import fetch_california_housing
 
-# Intento importar matplotlib; si no está, uso plotly, me daba error
+# Intento importar matplotlib; si no está, uso plotly
 try:
     import matplotlib.pyplot as plt
     USE_MPL = True
 except Exception:
-    import plotly.express as px
+    import plotly.express as px  # sólo si no hay MPL
     USE_MPL = False
 
 st.set_page_config(page_title="California Housing Explorer", layout="wide")
@@ -25,7 +25,8 @@ def load_data() -> pd.DataFrame:
 df_california = load_data()
 
 st.title("California Housing – Explorador Interactivo")
-# Valores faltantes (versión simple)
+
+# ====== Valores faltantes (simple) ======
 valor = int(df_california.isna().sum().sum())
 st.subheader("Valores faltantes / vacíos (simple)")
 st.markdown(f'Nulos por columna (isna): "{valor}"')
@@ -67,11 +68,11 @@ df_f = df_california.loc[
     (df_california["HouseAge"] <= age_range[1])
 ].copy()
 
-# Checkbox + number_input para latitud mínima
-use_lat_filter = st.sidebar.checkbox("Filtrar por vecindario", value=False)
-if use_lat_filter:
-    lat_min_total = float(df_california["Latitude"].min())
-    lat_max_total = float(df_california["Latitude"].max())
+# Checkbox + number_input para latitud mínima (usando rangos del DF ya filtrado)
+use_lat_filter = st.sidebar.checkbox("Filtrar por vecindario (Latitud mínima)", value=False)
+if use_lat_filter and not df_f.empty:
+    lat_min_total = float(df_f["Latitude"].min())
+    lat_max_total = float(df_f["Latitude"].max())
     lat_min = st.sidebar.number_input(
         "Latitud mínima",
         min_value=lat_min_total, max_value=lat_max_total,
@@ -93,39 +94,45 @@ else:
 # ========= Fase 3 =========
 st.header("Visualizaciones")
 
-#helpers
-def iqr_outliers(s: pd.Series):
-    q1 = s.quantile(0.25)
-    q3 = s.quantile(0.75)
+# Helper robusto para outliers
+def iqr_mask(series: pd.Series):
+    """Devuelve (mask_outlier, lower, upper) usando IQR sobre la serie actual.
+       Si hay pocos datos (<4) o IQR=0, no marca outliers.
+    """
+    s = pd.to_numeric(series, errors="coerce").dropna()
+    if s.size < 4:
+        return pd.Series(False, index=series.index), s.min() if len(s) else None, s.max() if len(s) else None
+    q1, q3 = s.quantile([0.25, 0.75])
     iqr = q3 - q1
+    if iqr == 0:
+        return pd.Series(False, index=series.index), s.min(), s.max()
     lower = q1 - 1.5 * iqr
     upper = q3 + 1.5 * iqr
-    mask = (s < lower) | (s > upper)
+    mask = (series < lower) | (series > upper)
+    mask = mask.reindex(series.index).fillna(False)  # alinear con df_f
     return mask, lower, upper
 
-# Histograma del Target (fondo negro + outliers)
+# --- Histograma del Target (fondo negro + outliers) ---
 st.subheader("Distribución de MedHouseVal")
 if not df_f.empty:
-    mask_y, lower, upper = iqr_outliers(df_f["MedHouseVal"])
+    mask_y, lower, upper = iqr_mask(df_f["MedHouseVal"])
 
     if USE_MPL:
         fig1, ax1 = plt.subplots(figsize=(6, 4), facecolor="black")
         ax1.set_facecolor("black")
         ax1.hist(df_f["MedHouseVal"], bins=30, color="#CCCCCC", edgecolor="#CCCCCC", alpha=0.35)
 
-        # Líneas de umbral IQR
-        ax1.axvline(lower, color="white", linestyle="--", linewidth=1)
-        ax1.axvline(upper, color="white", linestyle="--", linewidth=1)
+        if lower is not None and upper is not None:
+            ax1.axvline(lower, color="white", linestyle="--", linewidth=1)
+            ax1.axvline(upper, color="white", linestyle="--", linewidth=1)
 
-        # Rug de outliers sobre el eje X
         if mask_y.any():
             ax1.plot(
                 df_f.loc[mask_y, "MedHouseVal"],
-                [0] * mask_y.sum(),
+                [0] * int(mask_y.sum()),
                 "|", color="#FF4136", markersize=12, label="Outliers"
             )
 
-        # Estética: ejes/labels/ticks blancos
         for spine in ax1.spines.values():
             spine.set_color("white")
         ax1.tick_params(colors="white")
@@ -141,15 +148,13 @@ if not df_f.empty:
     else:
         import plotly.express as px
         fig1 = px.histogram(df_f, x="MedHouseVal", nbins=30, title="Histograma de MedHouseVal (IQR outliers)")
-        # Fondo negro + textos blancos
         fig1.update_layout(template="plotly_dark", paper_bgcolor="black", plot_bgcolor="black", font_color="white")
-        # Líneas IQR
-        fig1.add_vline(x=lower, line_dash="dash", line_color="white")
-        fig1.add_vline(x=upper, line_dash="dash", line_color="white")
-        # Rug/markers para outliers en y=0
+        if (lower is not None) and (upper is not None):
+            fig1.add_vline(x=lower, line_dash="dash", line_color="white")
+            fig1.add_vline(x=upper, line_dash="dash", line_color="white")
         if mask_y.any():
             fig1.add_scatter(
-                x=df_f.loc[mask_y, "MedHouseVal"], y=[0]*mask_y.sum(),
+                x=df_f.loc[mask_y, "MedHouseVal"], y=[0]*int(mask_y.sum()),
                 mode="markers", marker=dict(color="#FF4136", size=8),
                 name="Outliers"
             )
@@ -157,16 +162,15 @@ if not df_f.empty:
 else:
     st.info("Sin datos para graficar.")
 
-# Scatter MedInc vs MedHouseVal (fondo negro + outliers)
+# --- Scatter MedInc vs MedHouseVal (fondo negro + outliers) ---
 st.subheader("Relación: MedInc (X) vs MedHouseVal (Y)")
 if not df_f.empty:
-    mask_y, lower, upper = iqr_outliers(df_f["MedHouseVal"])
+    mask_y, lower, upper = iqr_mask(df_f["MedHouseVal"])
 
     if USE_MPL:
         fig2, ax2 = plt.subplots(figsize=(6, 4), facecolor="black")
         ax2.set_facecolor("black")
 
-        # Puntos normales (gris claro) y outliers (rojo)
         ax2.scatter(
             df_f.loc[~mask_y, "MedInc"], df_f.loc[~mask_y, "MedHouseVal"],
             s=8, alpha=0.6, color="#CCCCCC", label="Datos"
@@ -177,7 +181,6 @@ if not df_f.empty:
                 s=20, alpha=0.9, color="#FF4136", label="Outliers"
             )
 
-        # Estética: ejes/labels/ticks blancos
         for spine in ax2.spines.values():
             spine.set_color("white")
         ax2.tick_params(colors="white")
@@ -193,10 +196,9 @@ if not df_f.empty:
         import plotly.express as px
         df_plot = df_f.copy()
         df_plot["outlier"] = np.where(mask_y, "Outlier", "Dato")
-
         fig2 = px.scatter(
             df_plot, x="MedInc", y="MedHouseVal",
-            color="outlier", opacity=0.8,
+            color="outlier", opacity=0.85,
             title="Scatter: MedInc vs MedHouseVal",
             labels={"MedInc":"MedInc (Mediana de Ingresos)", "MedHouseVal":"Valor mediano vivienda"},
             color_discrete_map={"Dato":"#CCCCCC", "Outlier":"#FF4136"}
@@ -206,8 +208,7 @@ if not df_f.empty:
 else:
     st.info("Sin datos para graficar.")
 
-
-# Opcional: mapa
+# --- Mapa opcional ---
 with st.expander("📍Mapa geográfico (Lat/Long)"):
     if not df_f.empty:
         df_map = df_f.rename(columns={"Latitude": "lat", "Longitude": "lon"})
@@ -217,5 +218,3 @@ with st.expander("📍Mapa geográfico (Lat/Long)"):
             st.map(df_map[["lat", "lon"]])
     else:
         st.info("Sin datos para mapear.")
-
-
