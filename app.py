@@ -4,12 +4,12 @@ import pandas as pd
 import numpy as np
 from sklearn.datasets import fetch_california_housing
 
-# Intento importar matplotlib; si no está, uso plotly
+# Intento importar Matplotlib; si falla, uso Plotly
 try:
     import matplotlib.pyplot as plt
     USE_MPL = True
 except Exception:
-    import plotly.express as px  # fallback si no hay Matplotlib
+    import plotly.express as px  # fallback
     USE_MPL = False
 
 st.set_page_config(page_title="California Housing Explorer", layout="wide")
@@ -26,8 +26,22 @@ df_california = load_data()
 
 st.title("California Housing – Explorador Interactivo")
 
-# ====== Chequeos simples de faltantes ======
-st.subheader("Valores faltantes / vacíos (simple)")
+# ---------------- Sidebar: Índice con links (anclas) ----------------
+st.sidebar.markdown(
+    """
+    ### Índice
+    - <a href="#faltantes">Valores faltantes / vacíos</a>
+    - <a href="#vista">Vista rápida + dtypes</a>
+    - <a href="#controles">Controles y filtros</a>
+    - <a href="#resumen">Resumen descriptivo</a>
+    - <a href="#vis">Visualizaciones</a>
+    - <a href="#mapa">Mapa geográfico</a>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------- Sección: Faltantes ----------------
+st.markdown('<h2 id="faltantes">Valores faltantes / vacíos (simple)</h2>', unsafe_allow_html=True)
 total_nulos = int(df_california.isna().sum().sum())
 st.markdown(f'Nulos por columna (isna): "{total_nulos}"')
 
@@ -39,32 +53,22 @@ if df_california.select_dtypes(include="object").shape[1] > 0:
     )
 else:
     vacios_str = pd.Series(dtype=int)
-
 total_vacios = int(vacios_str.sum()) if not vacios_str.empty else 0
 st.markdown(f'Strings vacíos (solo texto): "{total_vacios}"')
 
-# Vista rápida
-st.subheader("Vista rápida del DataFrame")
+# ---------------- Sección: Vista + dtypes ----------------
+st.markdown('<h2 id="vista">Vista rápida del DataFrame</h2>', unsafe_allow_html=True)
 st.dataframe(df_california.head())
-st.write("Tipos de datos por columna:")
+st.markdown('<h3>Tipos de datos por columna</h3>', unsafe_allow_html=True)
 st.write(df_california.dtypes.to_frame("dtype"))
 
-# ========= Fase 2: Controles =========
-# ---- Sidebar: índice + toggles de secciones ----
-st.sidebar.markdown("## Índice")
-show_faltantes = st.sidebar.checkbox("Valores faltantes / vacíos", True)
-show_vista     = st.sidebar.checkbox("Vista rápida + dtypes", True)
-show_controles = st.sidebar.checkbox("Controles y filtros", True)
-show_resumen   = st.sidebar.checkbox("Resumen descriptivo", True)
-show_vis       = st.sidebar.checkbox("Visualizaciones (hist + scatter)", True)
-show_mapa      = st.sidebar.checkbox("Mapa geográfico (opcional)", False)
-st.sidebar.markdown("---")
+# ---------------- Sección: Controles (sidebar) ----------------
+st.markdown('<h2 id="controles">Controles y filtros</h2>', unsafe_allow_html=True)
 st.sidebar.markdown("## Controles")
 st.sidebar.markdown(
-    "Usa los filtros para acotar por **HouseAge** y **Latitud mínima (vecindario)**."
+    "Usá los filtros para acotar por **HouseAge** y **Latitud mínima (vecindario)**."
 )
 
-# Slider HouseAge
 houseage_min = float(df_california["HouseAge"].min())
 houseage_max = float(df_california["HouseAge"].max())
 age_range = st.sidebar.slider(
@@ -78,8 +82,6 @@ df_f = df_california.loc[
     (df_california["HouseAge"] <= age_range[1])
 ].copy()
 
-
-# Checkbox + number_input para latitud mínima (usando el DF ya filtrado por HouseAge)
 use_lat_filter = st.sidebar.checkbox("Filtrar por vecindario (Latitud mínima)", value=False)
 if use_lat_filter and not df_f.empty:
     lat_min_total = float(df_f["Latitude"].min())
@@ -91,8 +93,8 @@ if use_lat_filter and not df_f.empty:
     )
     df_f = df_f.loc[df_f["Latitude"] >= lat_min].copy()
 
-# Resumen post-filtros
-st.subheader("Resumen descriptivo")
+# ---------------- Sección: Resumen ----------------
+st.markdown('<h2 id="resumen">Resumen descriptivo (tras filtros)</h2>', unsafe_allow_html=True)
 if df_f.empty:
     st.warning("No hay filas tras aplicar los filtros.")
 else:
@@ -103,25 +105,22 @@ else:
     c2.metric("Mediana MedHouseVal", f"{mediana:,.3f}")
     c3.metric("Rango (max - min)", f"{rango:,.3f}")
 
-# ========= Fase 3: Visualizaciones =========
-st.header("Visualizaciones")
+# ---------------- Sección: Visualizaciones ----------------
+st.markdown('<h2 id="vis">Visualizaciones</h2>', unsafe_allow_html=True)
 
-# --- Histograma del Target (fondo negro, sin outliers) ---
-st.subheader("Distribución de MedHouseVal")
+# Histograma (tema oscuro)
+st.subheader("Distribución de MedHouseVal (tras filtros)")
 if not df_f.empty:
     if USE_MPL:
         fig1, ax1 = plt.subplots(figsize=(6, 4), facecolor="black")
         ax1.set_facecolor("black")
-        ax1.hist(df_f["MedHouseVal"], bins=30, color="#CCCCCC", edgecolor="#CCCCCC", alpha=0.6)
-
-        # Estética: ejes/labels/ticks blancos
-        for spine in ax1.spines.values():
-            spine.set_color("white")
+        ax1.hist(df_f["MedHouseVal"], bins=30, color="#CCCCCC", edgecolor="#CCCCCC", alpha=0.75)
+        for sp in ax1.spines.values():
+            sp.set_color("white")
         ax1.tick_params(colors="white")
         ax1.set_xlabel("MedHouseVal", color="white")
         ax1.set_ylabel("Frecuencia", color="white")
         ax1.set_title("Histograma de MedHouseVal", color="white")
-
         st.pyplot(fig1)
     else:
         fig1 = px.histogram(df_f, x="MedHouseVal", nbins=30, title="Histograma de MedHouseVal")
@@ -130,31 +129,24 @@ if not df_f.empty:
 else:
     st.info("Sin datos para graficar.")
 
-# --- Scatter MedInc vs MedHouseVal (fondo negro, sin outliers) ---
+# Scatter (tema oscuro)
 st.subheader("Relación: MedInc (X) vs MedHouseVal (Y)")
 if not df_f.empty:
     if USE_MPL:
         fig2, ax2 = plt.subplots(figsize=(6, 4), facecolor="black")
         ax2.set_facecolor("black")
-
-        ax2.scatter(
-            df_f["MedInc"], df_f["MedHouseVal"],
-            s=10, alpha=0.7, color="#CCCCCC", label="Datos"
-        )
-
-        # Estética: ejes/labels/ticks blancos
-        for spine in ax2.spines.values():
-            spine.set_color("white")
+        ax2.scatter(df_f["MedInc"], df_f["MedHouseVal"], s=10, alpha=0.8, color="#CCCCCC")
+        for sp in ax2.spines.values():
+            sp.set_color("white")
         ax2.tick_params(colors="white")
         ax2.set_xlabel("MedInc (Mediana de Ingresos)", color="white")
         ax2.set_ylabel("MedHouseVal (Valor mediano vivienda)", color="white")
         ax2.set_title("Scatter: MedInc vs MedHouseVal", color="white")
-
         st.pyplot(fig2)
     else:
         fig2 = px.scatter(
             df_f, x="MedInc", y="MedHouseVal",
-            opacity=0.8, title="Scatter: MedInc vs MedHouseVal",
+            opacity=0.85, title="Scatter: MedInc vs MedHouseVal",
             labels={"MedInc":"MedInc (Mediana de Ingresos)", "MedHouseVal":"Valor mediano vivienda"}
         )
         fig2.update_layout(template="plotly_dark", paper_bgcolor="black", plot_bgcolor="black", font_color="white")
@@ -162,7 +154,8 @@ if not df_f.empty:
 else:
     st.info("Sin datos para graficar.")
 
-# --- Mapa opcional ---
+# ---------------- Sección: Mapa ----------------
+st.markdown('<h2 id="mapa">Mapa geográfico</h2>', unsafe_allow_html=True)
 with st.expander("📍Mapa geográfico (Lat/Long)"):
     if not df_f.empty:
         df_map = df_f.rename(columns={"Latitude": "lat", "Longitude": "lon"})
