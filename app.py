@@ -14,7 +14,6 @@ except Exception:
 
 st.set_page_config(page_title="California Housing Explorer", layout="wide")
 
-# ========= Fase 1 =========
 @st.cache_data
 def load_data() -> pd.DataFrame:
     ds = fetch_california_housing(as_frame=False)
@@ -26,8 +25,6 @@ def load_data() -> pd.DataFrame:
 df_california = load_data()
 
 st.title("California Housing – Explorador Interactivo")
-st.caption("Fase 1: Carga y preparación de datos con Pandas")
-
 # Valores faltantes (versión simple)
 valor = int(df_california.isna().sum().sum())
 st.subheader("Valores faltantes / vacíos (simple)")
@@ -53,7 +50,7 @@ st.write(df_california.dtypes.to_frame("dtype"))
 # ========= Fase 2 =========
 st.sidebar.markdown("## Controles")
 st.sidebar.markdown(
-    "Usá los filtros para acotar por **HouseAge** y **latitud mínima**."
+    "Usa los filtros para acotar por **HouseAge** y **latitud mínima**."
 )
 
 # Slider HouseAge
@@ -96,44 +93,122 @@ else:
 # ========= Fase 3 =========
 st.header("Visualizaciones")
 
-# Histograma del Target
-st.subheader("Distribución de MedHouseVal (tras filtros)")
+#helpers
+def iqr_outliers(s: pd.Series):
+    q1 = s.quantile(0.25)
+    q3 = s.quantile(0.75)
+    iqr = q3 - q1
+    lower = q1 - 1.5 * iqr
+    upper = q3 + 1.5 * iqr
+    mask = (s < lower) | (s > upper)
+    return mask, lower, upper
+
+# Histograma del Target (fondo negro + outliers)
+st.subheader("Distribución de MedHouseVal")
 if not df_f.empty:
+    mask_y, lower, upper = iqr_outliers(df_f["MedHouseVal"])
+
     if USE_MPL:
-        fig1, ax1 = plt.subplots(figsize=(6, 4))
-        ax1.hist(df_f["MedHouseVal"], bins=30)
-        ax1.set_xlabel("MedHouseVal")
-        ax1.set_ylabel("Frecuencia")
-        ax1.set_title("Histograma de MedHouseVal")
+        fig1, ax1 = plt.subplots(figsize=(6, 4), facecolor="black")
+        ax1.set_facecolor("black")
+        ax1.hist(df_f["MedHouseVal"], bins=30, color="#CCCCCC", edgecolor="#CCCCCC", alpha=0.35)
+
+        # Líneas de umbral IQR
+        ax1.axvline(lower, color="white", linestyle="--", linewidth=1)
+        ax1.axvline(upper, color="white", linestyle="--", linewidth=1)
+
+        # Rug de outliers sobre el eje X
+        if mask_y.any():
+            ax1.plot(
+                df_f.loc[mask_y, "MedHouseVal"],
+                [0] * mask_y.sum(),
+                "|", color="#FF4136", markersize=12, label="Outliers"
+            )
+
+        # Estética: ejes/labels/ticks blancos
+        for spine in ax1.spines.values():
+            spine.set_color("white")
+        ax1.tick_params(colors="white")
+        ax1.set_xlabel("MedHouseVal", color="white")
+        ax1.set_ylabel("Frecuencia", color="white")
+        ax1.set_title("Histograma de MedHouseVal (IQR outliers)", color="white")
+        if mask_y.any():
+            leg = ax1.legend()
+            for text in leg.get_texts():
+                text.set_color("white")
         st.pyplot(fig1)
+
     else:
-        fig1 = px.histogram(df_f, x="MedHouseVal", nbins=30, title="Histograma de MedHouseVal")
+        import plotly.express as px
+        fig1 = px.histogram(df_f, x="MedHouseVal", nbins=30, title="Histograma de MedHouseVal (IQR outliers)")
+        # Fondo negro + textos blancos
+        fig1.update_layout(template="plotly_dark", paper_bgcolor="black", plot_bgcolor="black", font_color="white")
+        # Líneas IQR
+        fig1.add_vline(x=lower, line_dash="dash", line_color="white")
+        fig1.add_vline(x=upper, line_dash="dash", line_color="white")
+        # Rug/markers para outliers en y=0
+        if mask_y.any():
+            fig1.add_scatter(
+                x=df_f.loc[mask_y, "MedHouseVal"], y=[0]*mask_y.sum(),
+                mode="markers", marker=dict(color="#FF4136", size=8),
+                name="Outliers"
+            )
         st.plotly_chart(fig1, use_container_width=True)
 else:
     st.info("Sin datos para graficar.")
 
-# Scatter MedInc vs MedHouseVal
+# Scatter MedInc vs MedHouseVal (fondo negro + outliers)
 st.subheader("Relación: MedInc (X) vs MedHouseVal (Y)")
 if not df_f.empty:
+    mask_y, lower, upper = iqr_outliers(df_f["MedHouseVal"])
+
     if USE_MPL:
-        fig2, ax2 = plt.subplots(figsize=(6, 4))
-        ax2.scatter(df_f["MedInc"], df_f["MedHouseVal"], s=8, alpha=0.6)
-        ax2.set_xlabel("MedInc (Mediana de Ingresos)")
-        ax2.set_ylabel("MedHouseVal (Valor mediano vivienda)")
-        ax2.set_title("Scatter: MedInc vs MedHouseVal")
-        st.pyplot(fig2)
-    else:
-        fig2 = px.scatter(
-            df_f, x="MedInc", y="MedHouseVal",
-            opacity=0.6, title="Scatter: MedInc vs MedHouseVal",
-            labels={"MedInc":"MedInc (Mediana de Ingresos)", "MedHouseVal":"Valor mediano vivienda"}
+        fig2, ax2 = plt.subplots(figsize=(6, 4), facecolor="black")
+        ax2.set_facecolor("black")
+
+        # Puntos normales (gris claro) y outliers (rojo)
+        ax2.scatter(
+            df_f.loc[~mask_y, "MedInc"], df_f.loc[~mask_y, "MedHouseVal"],
+            s=8, alpha=0.6, color="#CCCCCC", label="Datos"
         )
+        if mask_y.any():
+            ax2.scatter(
+                df_f.loc[mask_y, "MedInc"], df_f.loc[mask_y, "MedHouseVal"],
+                s=20, alpha=0.9, color="#FF4136", label="Outliers"
+            )
+
+        # Estética: ejes/labels/ticks blancos
+        for spine in ax2.spines.values():
+            spine.set_color("white")
+        ax2.tick_params(colors="white")
+        ax2.set_xlabel("MedInc (Mediana de Ingresos)", color="white")
+        ax2.set_ylabel("MedHouseVal (Valor mediano vivienda)", color="white")
+        ax2.set_title("Scatter: MedInc vs MedHouseVal", color="white")
+        leg = ax2.legend()
+        for text in leg.get_texts():
+            text.set_color("white")
+        st.pyplot(fig2)
+
+    else:
+        import plotly.express as px
+        df_plot = df_f.copy()
+        df_plot["outlier"] = np.where(mask_y, "Outlier", "Dato")
+
+        fig2 = px.scatter(
+            df_plot, x="MedInc", y="MedHouseVal",
+            color="outlier", opacity=0.8,
+            title="Scatter: MedInc vs MedHouseVal",
+            labels={"MedInc":"MedInc (Mediana de Ingresos)", "MedHouseVal":"Valor mediano vivienda"},
+            color_discrete_map={"Dato":"#CCCCCC", "Outlier":"#FF4136"}
+        )
+        fig2.update_layout(template="plotly_dark", paper_bgcolor="black", plot_bgcolor="black", font_color="white")
         st.plotly_chart(fig2, use_container_width=True)
 else:
     st.info("Sin datos para graficar.")
 
+
 # Opcional: mapa
-with st.expander("📍 Opcional: Mapa geográfico (Lat/Long)"):
+with st.expander("📍Mapa geográfico (Lat/Long)"):
     if not df_f.empty:
         df_map = df_f.rename(columns={"Latitude": "lat", "Longitude": "lon"})
         try:
