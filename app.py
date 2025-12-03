@@ -50,9 +50,18 @@ st.write("Tipos de datos por columna:")
 st.write(df_california.dtypes.to_frame("dtype"))
 
 # ========= Fase 2: Controles =========
+# ---- Sidebar: índice + toggles de secciones ----
+st.sidebar.markdown("## Índice")
+show_faltantes = st.sidebar.checkbox("Valores faltantes / vacíos", True)
+show_vista     = st.sidebar.checkbox("Vista rápida + dtypes", True)
+show_controles = st.sidebar.checkbox("Controles y filtros", True)
+show_resumen   = st.sidebar.checkbox("Resumen descriptivo", True)
+show_vis       = st.sidebar.checkbox("Visualizaciones (hist + scatter)", True)
+show_mapa      = st.sidebar.checkbox("Mapa geográfico (opcional)", False)
+st.sidebar.markdown("---")
 st.sidebar.markdown("## Controles")
 st.sidebar.markdown(
-    "Usá los filtros para acotar por **HouseAge** y **Latitud mínima (vecindario)**."
+    "Usa los filtros para acotar por **HouseAge** y **Latitud mínima (vecindario)**."
 )
 
 # Slider HouseAge
@@ -68,6 +77,7 @@ df_f = df_california.loc[
     (df_california["HouseAge"] >= age_range[0]) &
     (df_california["HouseAge"] <= age_range[1])
 ].copy()
+
 
 # Checkbox + number_input para latitud mínima (usando el DF ya filtrado por HouseAge)
 use_lat_filter = st.sidebar.checkbox("Filtrar por vecindario (Latitud mínima)", value=False)
