@@ -71,12 +71,12 @@ df_f = df_california.loc[
 ].copy()
 
 # Checkbox + number_input para latitud mínima
-use_lat_filter = st.sidebar.checkbox("Filtrar por Latitud mínima", value=False)
+use_lat_filter = st.sidebar.checkbox("Filtrar por vecindario", value=False)
 if use_lat_filter:
     lat_min_total = float(df_california["Latitude"].min())
     lat_max_total = float(df_california["Latitude"].max())
     lat_min = st.sidebar.number_input(
-        "Latitude mínima",
+        "Latitud mínima",
         min_value=lat_min_total, max_value=lat_max_total,
         value=lat_min_total, step=0.5, format="%.2f"
     )
